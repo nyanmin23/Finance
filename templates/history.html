@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block main %}
-    <table class="table">
+    <table class="table table-striped">
         <thead>
             <tr>
                 <th class="text-start">Symbol</th>
@@ -17,13 +17,17 @@
         </thead>
 
         <tbody>
-            {% for symbol, share, transaction_type, price_per_share, time in transaction_history %}
+            {% for transaction in transaction_history %}
                 <tr>
-                    <td class="text-start">{{ symbol }}</td>
-                    <td class="text-end">{{ share }}</td>
-                    <td class="text-end">{{ transaction_type }}</td>
-                    <td class="text-end">{{ price_per_share }}</td>
-                    <td class="text-end">{{ time }}</td>
+                    <td class="text-start">
+                        {{ transaction.symbol if transaction.symbol else "N/A" }}
+                    </td>
+                    <td class="text-end">
+                        {% if transaction.transaction_type == 'SELL' %}-{% endif %}{{ transaction.shares }}
+                    </td>
+                    <td class="text-end">{{ transaction.transaction_type }}</td>
+                    <td class="text-end">{{ transaction.price_per_share }}</td>
+                    <td class="text-end">{{ transaction.timestamp }}</td>
                 </tr>
             {% endfor %}
         </tbody>

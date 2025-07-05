@@ -150,9 +150,6 @@ def history():
     """Show history of transactions"""
 
     user_id = session["user_id"]
-    if not user_id:
-        return redirect("/login")
-
     transaction_history = []
     transactions = db.execute(
         "SELECT symbol, transaction_type, shares, price_per_share, timestamp FROM transaction_history WHERE user_id = ? ORDER BY id DESC",
@@ -160,15 +157,20 @@ def history():
     )
 
     for transaction in transactions:
-        transaction_history.append(
-            (
-                transaction["symbol"],
-                transaction["shares"],
-                transaction["transaction_type"],
-                usd(transaction["price_per_share"]),
-                transaction["timestamp"]
-            )
-        )
+        price_per_share = transaction["price_per_share"]
+
+        if price_per_share is None:
+            price_per_share = "N/A"
+        else:
+            price_per_share = usd(price_per_share)
+
+        transaction_history.append({
+            "symbol": transaction["symbol"],
+            "shares": transaction["shares"],
+            "transaction_type": transaction["transaction_type"],
+            "price_per_share": price_per_share,
+            "timestamp": transaction["timestamp"]
+        })
 
     return render_template("history.html", transaction_history=transaction_history)
 
@@ -281,7 +283,7 @@ def register():
         # Return 'username already exists' apology
         except Exception as error:
             print(error)
-            return apology(f"{request.form.get('username')} already exists", 400)
+            return apology(f"username already exists", 400)
 
         rows = db.execute(
             "SELECT * FROM users WHERE username = ?", request.form.get("username")
