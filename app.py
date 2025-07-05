@@ -279,7 +279,7 @@ def register():
             )
 
         # Return 'username already exists' apology
-        except sqlite3.IntegrityError as error:
+        except Exception as error:
             print(error)
             return apology(f"{request.form.get('username')} already exists", 400)
 
