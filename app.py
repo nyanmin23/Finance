@@ -92,7 +92,7 @@ def buy():
         try:
             shares = int(request.form.get("shares"))
         except ValueError:
-            return apology("shares input accept only positive integer", 403)
+            return apology("shares input accept only positive integer", 400)
 
         if shares < 1:
             return apology("must provide positive integer", 400)
@@ -103,7 +103,7 @@ def buy():
             price_per_share = round(float(stock_info['price']), 2)
             symbol = stock_info["symbol"]
         else:
-            return apology("invalid symbol", 404)
+            return apology("invalid symbol", 400)
 
         total_amount = shares * price_per_share
 
@@ -249,7 +249,7 @@ def quote():
 
         # Return apology if symbol does not exist
         else:
-            return apology(f"invalid symbol - ({request.form.get('symbol').upper()})", 404)
+            return apology(f"invalid symbol - ({request.form.get('symbol').upper()})", 400)
 
     else:
         return render_template("quote.html")
@@ -261,10 +261,10 @@ def register():
 
     if request.method == "POST":
         if not request.form.get("username"):
-            return apology("must provide username", 400)
+            return apology("must provide username", 403)
 
         elif not request.form.get("password"):
-            return apology("must provide password", 400)
+            return apology("must provide password", 403)
 
         # Confirm password
         if request.form.get("confirmation") != request.form.get("password"):
@@ -307,7 +307,6 @@ def sell():
     symbols = [stock["symbol"] for stock in portfolio]
 
     if request.method == "POST":
-
         if not request.form.get("symbol"):
             return apology("must provide symbol", 400)
 
