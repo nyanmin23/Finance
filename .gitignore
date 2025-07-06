@@ -1,0 +1,8 @@
+# Virtual Environment
+venv/
+
+# Database file
+finance.db
+
+# Python cache
+__pycache__/
