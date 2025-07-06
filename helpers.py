@@ -23,7 +23,6 @@ def record_transaction(db, user_id, symbol, transaction_type, shares, price_per_
     )
 
 
-
 def apology(message, code=400):
     """Render message as an apology to user."""
 
