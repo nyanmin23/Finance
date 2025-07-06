@@ -1,4 +1,5 @@
 import os
+import logging
 
 from cs50 import SQL
 from flask import Flask, flash, redirect, render_template, request, session
@@ -23,6 +24,7 @@ db = SQL("sqlite:///finance.db")
 
 # Minimum withdrawal/ deposit amounts
 minimum_amount = 100.00
+logging.getLogger("cs50").disabled = False
 
 @app.after_request
 def after_request(response):
