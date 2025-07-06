@@ -1,5 +1,4 @@
 import os
-import sqlite3
 
 from cs50 import SQL
 from flask import Flask, flash, redirect, render_template, request, session
@@ -69,110 +68,45 @@ def index():
         return render_template("index.html",
                                balance=usd(balance),
                                total_value=usd(balance))
+    
 
-
-@app.route("/buy", methods=["GET", "POST"])
-@login_required
-def buy():
-    """Buy shares of stock"""
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """Register user"""
 
     if request.method == "POST":
-        user_id = session["user_id"]
-        transaction_type = "BUY"
-        balance = round(
-            float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2)
+        if not request.form.get("username"):
+            return apology("must provide username", 400)
 
-        if not request.form.get("symbol"):
-            return apology("missing symbol", 403)
+        elif not request.form.get("password"):
+            return apology("must provide password", 400)
 
-        elif not request.form.get("shares"):
-            return apology("missing shares", 403)
+        # Confirm password
+        if request.form.get("confirmation") != request.form.get("password"):
+            return apology("passwords do not match", 400)
 
-        # Ensure users submit valid input
         try:
-            shares = int(request.form.get("shares"))
-        except ValueError:
-            return apology("shares input accept only positive integer", 400)
-
-        if shares < 1:
-            return apology("must provide positive integer", 400)
-
-        stock_info = lookup(request.form.get("symbol"))
-        if stock_info is not None:
-            name = stock_info["name"]
-            price_per_share = round(float(stock_info['price']), 2)
-            symbol = stock_info["symbol"]
-        else:
-            return apology("invalid symbol", 400)
-
-        total_amount = shares * price_per_share
-
-        # Check if users have enough balance
-        if balance < total_amount:
-            return apology("not enough cash", 403)
-        else:
-            final_balance = balance - total_amount
-
-            # Update Balance
+            # Check username duplication
             db.execute(
-                "UPDATE users SET cash = ? WHERE id = ?",
-                final_balance, user_id
+                "INSERT INTO users (username, hash) VALUES (?, ?)",
+                request.form.get("username"),
+                generate_password_hash(request.form.get("password"))
             )
 
-            # List stocks permanently
-            db.execute(
-                "INSERT OR IGNORE INTO stocks (symbol, company_name) VALUES (?, ?)", symbol, name
-            )
+        # Return 'username already exists' apology
+        except Exception as error:
+            print(error)
+            return apology(f"username already exists", 400)
 
-            # Create and Update Portfolio
-            db.execute(
-                "INSERT INTO portfolio (user_id, symbol, shares) VALUES (?, ?, ?) ON CONFLICT(user_id, symbol) DO UPDATE SET shares = shares + excluded.shares",
-                user_id, symbol, shares
-            )
+        rows = db.execute(
+            "SELECT * FROM users WHERE username = ?", request.form.get("username")
+        )
 
-            # Track transaction history
-            db.execute(
-                "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
-                user_id, symbol, transaction_type, shares, price_per_share
-            )
-
-            # Success: Bought
-            flash("Bought!")
-            return redirect("/")
+        session["user_id"] = rows[0]["id"]
+        return redirect("/")
 
     else:
-        return render_template("buy.html")
-
-
-@app.route("/history")
-@login_required
-def history():
-    """Show history of transactions"""
-
-    user_id = session["user_id"]
-    transaction_history = []
-    transactions = db.execute(
-        "SELECT symbol, transaction_type, shares, price_per_share, timestamp FROM transaction_history WHERE user_id = ? ORDER BY id DESC",
-        user_id
-    )
-
-    for transaction in transactions:
-        price_per_share = transaction["price_per_share"]
-
-        if price_per_share is None:
-            price_per_share = "N/A"
-        else:
-            price_per_share = usd(price_per_share)
-
-        transaction_history.append({
-            "symbol": transaction["symbol"],
-            "shares": transaction["shares"],
-            "transaction_type": transaction["transaction_type"],
-            "price_per_share": price_per_share,
-            "timestamp": transaction["timestamp"]
-        })
-
-    return render_template("history.html", transaction_history=transaction_history)
+        return render_template("register.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -257,44 +191,78 @@ def quote():
         return render_template("quote.html")
 
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    """Register user"""
+@app.route("/buy", methods=["GET", "POST"])
+@login_required
+def buy():
+    """Buy shares of stock"""
 
     if request.method == "POST":
-        if not request.form.get("username"):
-            return apology("must provide username", 400)
+        user_id = session["user_id"]
+        transaction_type = "BUY"
+        balance = round(
+            float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2)
 
-        elif not request.form.get("password"):
-            return apology("must provide password", 400)
+        if not request.form.get("symbol"):
+            return apology("missing symbol", 403)
 
-        # Confirm password
-        if request.form.get("confirmation") != request.form.get("password"):
-            return apology("passwords do not match", 400)
+        elif not request.form.get("shares"):
+            return apology("missing shares", 403)
 
+        # Ensure users submit valid input
         try:
-            # Check username duplication
+            shares = int(request.form.get("shares"))
+        except ValueError:
+            return apology("shares must be a positive integer", 400)
+
+        if shares < 1:
+            return apology("shares must be a positive integer", 400)
+
+        stock_info = lookup(request.form.get("symbol"))
+        if stock_info is not None:
+            name = stock_info["name"]
+            price_per_share = round(float(stock_info['price']), 2)
+            symbol = stock_info["symbol"]
+        else:
+            return apology("invalid symbol", 400)
+
+        total_amount = shares * price_per_share
+
+        # Check if users have enough balance
+        if balance < total_amount:
+            return apology("not enough cash", 403)
+        else:
+            final_balance = balance - total_amount
+
+            # Update Balance
             db.execute(
-                "INSERT INTO users (username, hash) VALUES (?, ?)",
-                request.form.get("username"),
-                generate_password_hash(request.form.get("password"))
+                "UPDATE users SET cash = ? WHERE id = ?",
+                final_balance, user_id
             )
 
-        # Return 'username already exists' apology
-        except Exception as error:
-            print(error)
-            return apology(f"username already exists", 400)
+            # List stocks permanently
+            db.execute(
+                "INSERT OR IGNORE INTO stocks (symbol, company_name) VALUES (?, ?)", symbol, name
+            )
 
-        rows = db.execute(
-            "SELECT * FROM users WHERE username = ?", request.form.get("username")
-        )
+            # Create and Update Portfolio
+            db.execute(
+                "INSERT INTO portfolio (user_id, symbol, shares) VALUES (?, ?, ?) ON CONFLICT(user_id, symbol) DO UPDATE SET shares = shares + excluded.shares",
+                user_id, symbol, shares
+            )
 
-        session["user_id"] = rows[0]["id"]
-        return redirect("/")
+            # Track transaction history
+            db.execute(
+                "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
+                user_id, symbol, transaction_type, shares, price_per_share
+            )
+
+            # Success: Bought
+            flash("Bought!")
+            return redirect("/")
 
     else:
-        return render_template("register.html")
-
+        return render_template("buy.html")
+    
 
 @app.route("/sell", methods=["GET", "POST"])
 @login_required
@@ -303,10 +271,10 @@ def sell():
 
     user_id = session["user_id"]
     transaction_type = "SELL"
-    portfolio = db.execute("SELECT symbol, shares FROM portfolio WHERE user_id = ?", user_id)
     balance = round(
-        float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2
-    )
+            float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2
+        )
+    portfolio = db.execute("SELECT symbol FROM portfolio WHERE user_id = ?", user_id)
     symbols = [stock["symbol"] for stock in portfolio]
 
     if request.method == "POST":
@@ -323,19 +291,14 @@ def sell():
 
         if shares_to_sell < 1:
             return apology("must provide positive integer", 400)
-
+        
         symbol = request.form.get("symbol")
+        shares = db.execute("SELECT shares FROM portfolio WHERE user_id = ? AND symbol = ?", user_id, symbol)
 
-        # Check if symbol is in user's portfolio
-        if symbol in symbols:
-            shares_owned = int(
-                db.execute(
-                    "SELECT shares FROM portfolio WHERE user_id = ? AND symbol = ?",
-                    user_id, symbol)[0]["shares"]
-            )
-
-        else:
-            return apology("invalid symbol", 404)
+        if not shares:
+            return apology("You do not own this stock", 404)
+        
+        shares_owned = shares[0]["shares"]
 
         # Lookup current stock price
         stock_info = lookup(symbol)
@@ -381,6 +344,50 @@ def sell():
 
     else:
         return render_template("sell.html", symbols=symbols)
+    
+
+@app.route("/deposit", methods=["GET", "POST"])
+@login_required
+def deposit():
+    """Deposit cash"""
+
+    if request.method == "POST":
+        user_id = session["user_id"]
+        minimum_deposit = 100.00
+        transaction_type = "DEPOSIT"
+        balance = round(
+            float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2)
+
+        if not request.form.get("amount"):
+            return apology("must provide amount of cash", 400)
+
+        try:
+            deposit = round(float(request.form.get("amount")), 2)
+        except ValueError:
+            return apology("deposit amount must be a positive number", 400)
+
+        if deposit < minimum_deposit:
+            return apology(f"minimum deposit amount is {usd(minimum_deposit)}", 403)
+
+        final_balance = balance + deposit
+
+        # Update balance
+        db.execute(
+            "UPDATE users SET cash = ? WHERE id = ?",
+            final_balance, user_id
+        )
+
+        # Track transaction history
+        db.execute(
+            "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
+            user_id, None, transaction_type, 0, deposit
+        )
+
+        flash("Success: Deposit!")
+        return redirect("/")
+
+    else:
+        return render_template("deposit.html")
 
 
 @app.route("/withdraw", methods=["GET", "POST"])
@@ -451,45 +458,33 @@ def withdraw():
         return render_template("withdraw.html")
 
 
-@app.route("/deposit", methods=["GET", "POST"])
+@app.route("/history")
 @login_required
-def deposit():
-    """Deposit cash"""
+def history():
+    """Show history of transactions"""
 
-    if request.method == "POST":
-        user_id = session["user_id"]
-        minimum_deposit = 100.00
-        transaction_type = "DEPOSIT"
-        balance = round(
-            float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2)
+    user_id = session["user_id"]
+    transaction_history = []
+    transactions = db.execute(
+        "SELECT symbol, transaction_type, shares, price_per_share, timestamp FROM transaction_history WHERE user_id = ? ORDER BY id DESC",
+        user_id
+    )
 
-        if not request.form.get("amount"):
-            return apology("must provide amount of cash", 400)
+    for transaction in transactions:
+        price_per_share = transaction["price_per_share"]
 
-        try:
-            deposit = round(float(request.form.get("amount")), 2)
-        except ValueError:
-            return apology("deposit amount must be a positive number", 400)
+        if price_per_share is None:
+            price_per_share = "N/A"
+        else:
+            price_per_share = usd(price_per_share)
 
-        if deposit < minimum_deposit:
-            return apology(f"minimum deposit amount is {usd(minimum_deposit)}", 403)
+        transaction_history.append({
+            "symbol": transaction["symbol"],
+            "shares": transaction["shares"],
+            "transaction_type": transaction["transaction_type"],
+            "price_per_share": price_per_share,
+            "timestamp": transaction["timestamp"]
+        })
 
-        final_balance = balance + deposit
+    return render_template("history.html", transaction_history=transaction_history)
 
-        # Update balance
-        db.execute(
-            "UPDATE users SET cash = ? WHERE id = ?",
-            final_balance, user_id
-        )
-
-        # Track transaction history
-        db.execute(
-            "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
-            user_id, None, transaction_type, 0, deposit
-        )
-
-        flash("Success: Deposit!")
-        return redirect("/")
-
-    else:
-        return render_template("deposit.html")
