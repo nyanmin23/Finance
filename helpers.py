@@ -1,10 +1,14 @@
 import requests
 
-from cs50 import SQL
 from flask import redirect, render_template, session
+from enum import Enum
 from functools import wraps
 
-db = SQL("sqlite:///finance.db")
+class TransactionType(Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+    DEPOSIT = "DEPOSIT"
+    WITHDRAW = "WITHDRAW"
 
 def record_transaction(db, user_id, symbol, transaction_type, shares, price_per_share, final_balance):
     """ Record a transaction in the database. """
@@ -17,7 +21,7 @@ def record_transaction(db, user_id, symbol, transaction_type, shares, price_per_
         "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
         user_id,
         symbol, 
-        transaction_type, 
+        transaction_type.value, 
         shares, 
         price_per_share
     )
@@ -66,7 +70,8 @@ def login_required(f):
 
 def lookup(symbol):
     """Look up quote for symbol."""
-    url = f"https://finance.cs50.io/quote?symbol={symbol.upper()}"
+    symbol = symbol.upper()
+    url = f"https://finance.cs50.io/quote?symbol={symbol}"
     try:
         response = requests.get(url)
         response.raise_for_status()  # Raise an error for HTTP error responses
@@ -74,7 +79,7 @@ def lookup(symbol):
         return {
             "name": quote_data["companyName"],
             "price": quote_data["latestPrice"],
-            "symbol": symbol.upper()
+            "symbol": symbol
         }
     except requests.RequestException as e:
         print(f"Request error: {e}")

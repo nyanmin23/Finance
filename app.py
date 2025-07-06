@@ -5,7 +5,7 @@ from flask import Flask, flash, redirect, render_template, request, session
 from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from helpers import apology, login_required, lookup, usd
+from helpers import apology, login_required, lookup, usd, record_transaction, TransactionType
 
 # Configure application
 app = Flask(__name__)
@@ -21,6 +21,8 @@ Session(app)
 # Configure CS50 Library to use SQLite database
 db = SQL("sqlite:///finance.db")
 
+# Minimum withdrawal/ deposit amounts
+minimum_amount = 100.00
 
 @app.after_request
 def after_request(response):
@@ -43,9 +45,10 @@ def index():
         session.clear()
         return redirect("/login")
     else:
-        balance = round(float(cash[0]["cash"]))
+        balance = round(float(cash[0]["cash"]), 2)
 
     portfolio = db.execute("SELECT * FROM portfolio WHERE user_id = ?", user_id)
+    
     if portfolio:
         symbols = [symbol["symbol"] for symbol in portfolio]
         shares = [share["shares"] for share in portfolio]
@@ -57,8 +60,13 @@ def index():
             if stock_info:
                 price_per_share = round(float(stock_info["price"]), 2)
                 subtotal = int(share) * price_per_share
-                holdings.append((symbol, share, usd(price_per_share), usd(subtotal)))
                 total_value.append(subtotal)
+                holdings.append({
+                    "symbol": symbol,
+                    "shares": share,
+                    "price": usd(price_per_share),
+                    "total": usd(subtotal)
+                    })
 
         return render_template("index.html",
                                portfolio=holdings,
@@ -198,7 +206,6 @@ def buy():
 
     if request.method == "POST":
         user_id = session["user_id"]
-        transaction_type = "BUY"
         balance = round(
             float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2)
 
@@ -233,10 +240,9 @@ def buy():
         else:
             final_balance = balance - total_amount
 
-            # Update Balance
-            db.execute(
-                "UPDATE users SET cash = ? WHERE id = ?",
-                final_balance, user_id
+            # Update Balance and record transaction
+            record_transaction(
+                db, user_id, symbol, TransactionType.BUY, shares, price_per_share, final_balance
             )
 
             # List stocks permanently
@@ -244,16 +250,10 @@ def buy():
                 "INSERT OR IGNORE INTO stocks (symbol, company_name) VALUES (?, ?)", symbol, name
             )
 
-            # Create and Update Portfolio
+            # Update Portfolio
             db.execute(
                 "INSERT INTO portfolio (user_id, symbol, shares) VALUES (?, ?, ?) ON CONFLICT(user_id, symbol) DO UPDATE SET shares = shares + excluded.shares",
                 user_id, symbol, shares
-            )
-
-            # Track transaction history
-            db.execute(
-                "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
-                user_id, symbol, transaction_type, shares, price_per_share
             )
 
             # Success: Bought
@@ -270,7 +270,6 @@ def sell():
     """Sell shares of stock"""
 
     user_id = session["user_id"]
-    transaction_type = "SELL"
     balance = round(
             float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2
         )
@@ -313,13 +312,9 @@ def sell():
             final_balance = balance + trade_value
             net_shares = shares_owned - shares_to_sell
 
-            # Update Balance
-            db.execute("UPDATE users SET cash = ? WHERE id = ?", final_balance, user_id)
-
-            # Track transaction history
-            db.execute(
-                "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
-                user_id, symbol, transaction_type, shares_to_sell, price_per_share
+            # Update Balance and record transaction
+            record_transaction(
+                db, user_id, symbol, TransactionType.SELL, shares_to_sell, price_per_share, final_balance
             )
 
             # Update Portfolio
@@ -353,8 +348,6 @@ def deposit():
 
     if request.method == "POST":
         user_id = session["user_id"]
-        minimum_deposit = 100.00
-        transaction_type = "DEPOSIT"
         balance = round(
             float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2)
 
@@ -366,21 +359,14 @@ def deposit():
         except ValueError:
             return apology("deposit amount must be a positive number", 400)
 
-        if deposit < minimum_deposit:
-            return apology(f"minimum deposit amount is {usd(minimum_deposit)}", 403)
+        if deposit < minimum_amount:
+            return apology(f"minimum deposit amount is {usd(minimum_amount)}", 403)
 
         final_balance = balance + deposit
 
-        # Update balance
-        db.execute(
-            "UPDATE users SET cash = ? WHERE id = ?",
-            final_balance, user_id
-        )
-
-        # Track transaction history
-        db.execute(
-            "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
-            user_id, None, transaction_type, 0, deposit
+        # Update balance and record transaction
+        record_transaction(
+            db, user_id, None, TransactionType.DEPOSIT, 0, deposit, final_balance
         )
 
         flash("Success: Deposit!")
@@ -397,8 +383,6 @@ def withdraw():
 
     if request.method == "POST":
         user_id = session["user_id"]
-        minimum_withdrawal = 100.00
-        transaction_type = "WITHDRAW"
         balance = round(
             float(db.execute("SELECT cash FROM users WHERE id = ?", user_id)[0]["cash"]), 2
         )
@@ -430,22 +414,15 @@ def withdraw():
         except ValueError:
             return apology("withdrawal amount must be a positive number", 400)
 
-        if withdrawal < minimum_withdrawal:
-            return apology(f"minimum withdrawal amount is {usd(minimum_withdrawal)}", 403)
+        if withdrawal < minimum_amount:
+            return apology(f"minimum withdrawal amount is {usd(minimum_amount)}", 403)
 
         if balance >= withdrawal:
             final_balance = balance - withdrawal
 
-            # Update balance
-            db.execute(
-                "UPDATE users SET cash = ? WHERE id = ?",
-                final_balance, user_id
-            )
-
-            # Track transaction history
-            db.execute(
-                "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
-                user_id, None, transaction_type, 0, withdrawal
+            # Update balance and record transaction
+            record_transaction(
+                db, user_id, None, TransactionType.WITHDRAW, 0, withdrawal, final_balance
             )
 
         else:

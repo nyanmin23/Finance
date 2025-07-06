@@ -16,27 +16,22 @@
         </thead>
 
         <tbody>
-            {% for symbol, share, price_per_share, subtotal in portfolio %}
+            {% for holding in portfolio %}
                 <tr>
-                    <td class="text-start">{{ symbol }}</td>
-                    <td class="text-end">{{ share }}</td>
-                    <td class="text-end">{{ price_per_share }}</td>
-                    <td class="text-end">{{ subtotal }}</td>
+                    <td class="text-start">{{ holding.symbol }}</td>
+                    <td class="text-end">{{ holding.shares }}</td>
+                    <td class="text-end">{{ holding.price }}</td>
+                    <td class="text-end">{{ holding.total }}</td>
                 </tr>
             {% endfor %}
         </tbody>
-
-        <tfoot>
-            <tr>
-                <td class="border-0 fw-bold text-end" colspan="3">Cash</td>
-                <td class="border-0 w-bold text-end">{{ balance }}</td>
-            </tr>
-            <tr>
-                <td class="border-0 fw-bold text-end" colspan="3">Total</td>
-                <td class="border-0 w-bold text-end">{{ total_value }}</td>
-            </tr>
-        </tfoot>
     </table>
+
+    <div class="text-end pt-3">
+        <h5>Cash: <span class="fw-normal">{{ balance }}</span></h5>
+        <h4>Total: <span class="fw-bold">{{ total_value }}</span></h4>
+    </div>
+
     <div class="mb-3 text-end">
         <a href="/withdraw" class="btn btn-primary me-3">Withdraw</a>
         <a href="/deposit" class="btn btn-primary">Deposit</a>
