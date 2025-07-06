@@ -1,7 +1,27 @@
 import requests
 
+from cs50 import SQL
 from flask import redirect, render_template, session
 from functools import wraps
+
+db = SQL("sqlite:///finance.db")
+
+def record_transaction(db, user_id, symbol, transaction_type, shares, price_per_share, final_balance):
+    """ Record a transaction in the database. """
+
+    # Update Balance
+    db.execute("UPDATE users SET cash = ? WHERE id = ?", final_balance, user_id)
+
+    # Update Transaction History
+    db.execute(
+        "INSERT INTO transaction_history (user_id, symbol, transaction_type, shares, price_per_share) VALUES (?, ?, ?, ?, ?)",
+        user_id,
+        symbol, 
+        transaction_type, 
+        shares, 
+        price_per_share
+    )
+
 
 
 def apology(message, code=400):
