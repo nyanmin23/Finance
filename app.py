@@ -64,7 +64,7 @@ def index():
                 holdings.append({
                     "symbol": symbol,
                     "shares": share,
-                    "price": usd(price_per_share),
+                    "price_per_share": usd(price_per_share),
                     "total": usd(subtotal)
                     })
 
